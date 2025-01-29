@@ -4,8 +4,6 @@
 
 Use this code to import an Alma Analytics report into a Google Spreadsheet for easy manipulation of data and displaying it on the web.
 
-<h2>Why the project is useful</h2>
-
 <h2>Prerequisites</h2>
 <ul>
 <li>A Google account to create a Google sheet.</li>
@@ -18,7 +16,7 @@ In Google Sheets, create a new file.
 
 Go to Extensions > Apps Script
 
-Copy and paste the code from 'alma_report_to_gsheet' to the code window and click 'Save'.
+Copy and paste the code from '[alma_report_to_gsheet](alma_report_to_gsheet)' to the code window and click 'Save'.
 
 ![Alt text](images/code_screenshot.png?raw=true "Example of Code")
 
