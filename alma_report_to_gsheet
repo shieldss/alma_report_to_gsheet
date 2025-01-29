@@ -1,0 +1,124 @@
+function importXmlData() {
+    // Retrieve the API key from script properties
+    const apiKey = PropertiesService.getScriptProperties().getProperty('API_KEY');
+    
+    // Retrieve the path from script properties or prompt for it if not set
+    let path = PropertiesService.getScriptProperties().getProperty('PATH');
+    if (!path) {
+        path = promptForPath(); // Prompt user for the path
+        if (path) {
+            PropertiesService.getScriptProperties().setProperty('PATH', path); // Save the path
+        } else {
+            throw new Error('Path is required to proceed.');
+        }
+    }
+
+    // Ensure the path is encoded only once for URL compatibility
+    const encodedPath = path.replace(/ /g, '+').replace(/\(/g, '%28').replace(/\)/g, '%29').replace(/\//g, '%2F');
+
+    // Construct the URL with dynamic path and API key
+    const url = `https://api-na.hosted.exlibrisgroup.com/almaws/v1/analytics/reports?path=${encodedPath}&limit=1000&col_names=true&apikey=${apiKey}`;
+
+    // Log the URL to verify its structure (for debugging purposes)
+    Logger.log(`Constructed URL: ${url}`);
+
+    // Fetch the XML data from the URL
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) {
+        Logger.log(`Error fetching data: ${response.getContentText()}`);
+        throw new Error('Failed to fetch the data from the API.');
+    }
+
+    const xmlString = response.getContentText();
+
+    // Parse and process the XML response (unchanged from your original code)
+    const xml = XmlService.parse(xmlString);
+    const root = xml.getRootElement();
+
+    // Navigate to the Row elements
+    const queryResult = root.getChild('QueryResult');
+    if (!queryResult) {
+        Logger.log('QueryResult not found');
+        return;
+    }
+
+    const resultXml = queryResult.getChild('ResultXml');
+    if (!resultXml) {
+        Logger.log('ResultXml not found');
+        return;
+    }
+
+    const ns = XmlService.getNamespace('urn:schemas-microsoft-com:xml-analysis:rowset');
+    const rowset = resultXml.getChild('rowset', ns);
+    if (!rowset) {
+        Logger.log('Rowset not found');
+        return;
+    }
+
+    const rows = rowset.getChildren('Row', ns);
+    if (!rows || rows.length === 0) {
+        Logger.log('No Row elements found');
+        return;
+    }
+
+    // Prepare the data to be inserted into the Google Sheet
+    const data = [];
+
+    // Extract headers from the first row's children
+    const firstRowChildren = rows[0].getChildren();
+    if (!firstRowChildren || firstRowChildren.length === 0) {
+        Logger.log('No children in the first Row element');
+        return;
+    }
+
+    const headers = firstRowChildren.map(child => child.getName());
+    const numColumns = headers.length; // Get the expected number of columns
+    data.push(headers);
+
+    // Extract data from each row
+    rows.forEach(row => {
+        const rowData = row.getChildren().map(child => child.getText());
+        
+        // Normalize the row length by padding or truncating to match the header length
+        while (rowData.length < numColumns) {
+            rowData.push(''); // Add empty string if there are missing columns
+        }
+        rowData.length = numColumns; // Ensure the row has exactly numColumns elements
+
+        data.push(rowData);
+    });
+
+    // Insert the data into the Google Sheet
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    sheet.clear(); // Optional: Clear existing content
+    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+}
+
+// Function to prompt the user for the path
+function promptForPath() {
+    const ui = SpreadsheetApp.getUi();
+    const response = ui.prompt(
+        'Enter Report Path',
+        'Please provide the path for the report (e.g., /shared/.../rpt_TotalLendingSUNY):',
+        ui.ButtonSet.OK_CANCEL
+    );
+    
+    if (response.getSelectedButton() === ui.Button.OK) {
+        return response.getResponseText();
+    }
+    return null;
+}
+
+// Trigger to run when the spreadsheet is opened
+function onOpen() {
+    const ui = SpreadsheetApp.getUi();
+    ui.createMenu('Custom Menu')
+        .addItem('Import XML Data', 'importXmlData')
+        .addToUi();
+    
+    // Check if path exists; if not, prompt for it
+    let path = PropertiesService.getScriptProperties().getProperty('PATH');
+    if (!path) {
+        promptForPath();
+    }
+}
